@@ -2,6 +2,7 @@ package com.michaelinacio.saga.temporal;
 
 import io.temporal.client.WorkflowClient;
 import io.temporal.serviceclient.WorkflowServiceStubs;
+import io.temporal.serviceclient.WorkflowServiceStubsOptions;
 import io.temporal.worker.Worker;
 import io.temporal.worker.WorkerFactory;
 import org.springframework.boot.CommandLineRunner;
@@ -20,7 +21,11 @@ public class TemporalSagaApplication {
     @Bean
     CommandLineRunner temporalWorker() {
         return args -> {
-            WorkflowServiceStubs service = WorkflowServiceStubs.newServiceStubs();
+            String target = System.getenv().getOrDefault("TEMPORAL_TARGET", "localhost:7233");
+            WorkflowServiceStubsOptions options = WorkflowServiceStubsOptions.newBuilder()
+                    .setTarget(target)
+                    .build();
+            WorkflowServiceStubs service = WorkflowServiceStubs.newServiceStubs(options);
             WorkflowClient client = WorkflowClient.newInstance(service);
             WorkerFactory factory = WorkerFactory.newInstance(client);
             Worker worker = factory.newWorker(TASK_QUEUE);
