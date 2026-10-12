@@ -1,8 +1,9 @@
 package com.michaelinacio.saga.temporal;
 
-import io.temporal.workflow.Workflow;
-import io.temporal.workflow.Saga;
 import io.temporal.activity.ActivityOptions;
+import io.temporal.common.RetryOptions;
+import io.temporal.workflow.Saga;
+import io.temporal.workflow.Workflow;
 
 import java.time.Duration;
 
@@ -12,14 +13,15 @@ public class OrderSagaWorkflow implements OrderSaga {
             ActivityOptions.newBuilder()
                     .setStartToCloseTimeout(Duration.ofSeconds(20))
                     .setScheduleToCloseTimeout(Duration.ofMinutes(2))
+                    .setRetryOptions(RetryOptions.newBuilder().setMaximumAttempts(1).build())
                     .build());
 
     @Override
     public String placeOrder(OrderRequest request) {
         Saga saga = new Saga(new Saga.Options.Builder().setParallelCompensation(false).build());
         try {
-            // Register compensation before executing an operation that may fail
-            // after the remote side effect has already happened.
+            // Register compensation before the side effect: a remote operation can
+            // succeed while its response is lost, leaving the outcome uncertain.
             saga.addCompensation(activities::releaseInventory, request);
             activities.reserveInventory(request);
 
