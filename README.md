@@ -1,32 +1,67 @@
-# Order Saga with Temporal (Java)
+# Order Saga with Temporal (Java 25)
 
-Projeto independente de estudo para implementar uma Saga orquestrada pelo Temporal Java SDK. O exemplo simula a criação de um pedido com reserva de estoque, cobrança e reserva de entrega. Se uma etapa falhar, as compensações são executadas em ordem inversa.
+Projeto independente para demonstrar uma Saga orquestrada pelo Temporal Java SDK. Todas as integrações de negócio são simuladas; não há cobrança real.
 
 ## Fluxo
 
 1. Reservar estoque.
-2. Cobrar pagamento.
+2. Simular cobrança.
 3. Reservar entrega.
-4. Se alguma etapa falhar, compensar as etapas já iniciadas: cancelar entrega, estornar pagamento e liberar estoque, conforme aplicável.
+4. Se uma etapa falhar, executar compensações em ordem inversa: cancelar entrega, estornar pagamento e liberar estoque.
 
-## Tecnologias
+## Requisitos
 
-- Java 25
-- Maven
-- Spring Boot para inicialização do Worker
-- Temporal Java SDK
-- Docker Compose para Temporal local (a configuração completa do servidor será adicionada em seguida)
+- JDK 25
+- Docker Desktop com Docker Compose
+- Maven 3.9+
 
-## Executar
+## Executar localmente
 
-O projeto está em construção. Configure um servidor Temporal local e as variáveis de conexão antes de executar o Worker. Não use integrações reais nem dados de pagamento reais.
+Terminal 1 — iniciar Temporal, PostgreSQL e a interface web:
 
-## Princípios importantes
+```bash
+docker compose up -d
+```
 
-- Workflows devem ser determinísticos; chamadas externas ficam em Activities.
-- Activities e compensações precisam ser idempotentes.
-- Defina timeouts e políticas de retry por Activity.
-- Registre compensações antes da execução de cada efeito externo quando uma falha parcial for possível.
-- Compensação é uma nova operação de negócio, não um rollback de banco distribuído.
+Temporal UI: http://localhost:8088
 
-Referências: [Temporal Java SDK](https://docs.temporal.io/develop/java) e [Saga Pattern](https://docs.temporal.io/develop/java).
+Terminal 2 — iniciar a API e o worker:
+
+```bash
+mvn spring-boot:run
+```
+
+A API fica em http://localhost:8080. Para usar outro servidor, configure `TEMPORAL_TARGET` (padrão `localhost:7233`).
+
+## Criar pedido de teste
+
+Sucesso:
+
+```bash
+curl -X POST http://localhost:8080/api/orders -H "Content-Type: application/json" -d '{"orderId":"pedido-100","customerId":"cliente-1","sku":"CAMISETA-1","quantity":1,"amount":49.90,"currency":"BRL"}'
+```
+
+Falha simulada na entrega — deve executar cancelamento, estorno e liberação:
+
+```bash
+curl -X POST http://localhost:8080/api/orders -H "Content-Type: application/json" -d '{"orderId":"pedido-101","customerId":"cliente-1","sku":"FAIL_DELIVERY","quantity":1,"amount":49.90,"currency":"BRL"}'
+```
+
+Cada `orderId` gera um ID de workflow determinístico; enviar novamente o mesmo ID retorna HTTP 409 em vez de iniciar uma segunda execução.
+
+## Testes
+
+```bash
+mvn --batch-mode verify
+```
+
+Os testes usam o ambiente de teste do Temporal e verificam sucesso e ordem de compensação sem precisar subir Docker.
+
+## Limites e boas práticas
+
+- O cenário é uma demonstração local, não um serviço financeiro de produção.
+- Atividades e compensações de produção precisam de idempotência durável, timeouts, retries específicos, observabilidade e tratamento de resultados incertos.
+- O workflow usa uma tentativa por Activity para tornar a falha simulada determinística; revise a política para o seu domínio.
+- As credenciais no Compose são apenas locais. Não exponha esse ambiente publicamente.
+
+Referências: [Temporal Java SDK](https://docs.temporal.io/develop/java) e [Temporal Java SDK no GitHub](https://github.com/temporalio/sdk-java).
