@@ -1,0 +1,37 @@
+name: End-to-end
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docker-compose.yml'
+      - 'scripts/**'
+      - 'src/main/**'
+      - '.github/workflows/e2e.yml'
+  pull_request:
+    paths:
+      - 'docker-compose.yml'
+      - 'scripts/**'
+      - 'src/main/**'
+      - '.github/workflows/e2e.yml'
+  workflow_dispatch:
+
+jobs:
+  temporal-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: Run against real Temporal server
+        run: bash scripts/e2e.sh
+      - name: Show application log on failure
+        if: failure()
+        run: |
+          if [ -f "$RUNNER_TEMP/temporal-saga-e2e.log" ]; then
+            cat "$RUNNER_TEMP/temporal-saga-e2e.log"
+          fi
