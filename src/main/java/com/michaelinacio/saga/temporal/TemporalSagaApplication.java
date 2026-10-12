@@ -18,16 +18,26 @@ public class TemporalSagaApplication {
         SpringApplication.run(TemporalSagaApplication.class, args);
     }
 
+    @Bean(destroyMethod = "shutdown")
+    WorkflowServiceStubs workflowServiceStubs() {
+        String target = System.getenv().getOrDefault("TEMPORAL_TARGET", "localhost:7233");
+        return WorkflowServiceStubs.newServiceStubs(
+                WorkflowServiceStubsOptions.newBuilder().setTarget(target).build());
+    }
+
     @Bean
-    CommandLineRunner temporalWorker() {
+    WorkflowClient workflowClient(WorkflowServiceStubs service) {
+        return WorkflowClient.newInstance(service);
+    }
+
+    @Bean(destroyMethod = "shutdown")
+    WorkerFactory workerFactory(WorkflowClient client) {
+        return WorkerFactory.newInstance(client);
+    }
+
+    @Bean
+    CommandLineRunner temporalWorker(WorkerFactory factory) {
         return args -> {
-            String target = System.getenv().getOrDefault("TEMPORAL_TARGET", "localhost:7233");
-            WorkflowServiceStubsOptions options = WorkflowServiceStubsOptions.newBuilder()
-                    .setTarget(target)
-                    .build();
-            WorkflowServiceStubs service = WorkflowServiceStubs.newServiceStubs(options);
-            WorkflowClient client = WorkflowClient.newInstance(service);
-            WorkerFactory factory = WorkerFactory.newInstance(client);
             Worker worker = factory.newWorker(TASK_QUEUE);
             worker.registerWorkflowImplementationTypes(OrderSagaWorkflow.class);
             worker.registerActivitiesImplementations(new SandboxOrderActivities());
